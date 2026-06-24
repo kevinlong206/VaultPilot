@@ -15,9 +15,11 @@ import {
 } from 'obsidian';
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { delimiter } from 'node:path';
 
 const VIEW_TYPE_VAULTPILOT = 'vaultpilot-chat';
 const BASE_COPILOT_ARGS = ['-p', '{prompt}', '--allow-all', '--no-color', '--output-format', 'json'];
+const STREAMING_MARKDOWN_RENDER_DELAY_MS = 120;
 
 interface VaultPilotSettings {
 	commandMode: 'auto' | 'custom';
@@ -328,6 +330,21 @@ export default class VaultPilotPlugin extends Plugin {
 			return activeMarkdownView;
 		}
 
+		const recentMarkdownView = getMarkdownViewFromLeaf(this.app.workspace.getMostRecentLeaf());
+		if (recentMarkdownView) {
+			this.captureMarkdownView(recentMarkdownView);
+			return recentMarkdownView;
+		}
+
+		const openMarkdownView = this.app.workspace
+			.getLeavesOfType('markdown')
+			.map(getMarkdownViewFromLeaf)
+			.find((view): view is MarkdownView => view !== null);
+		if (openMarkdownView) {
+			this.captureMarkdownView(openMarkdownView);
+			return openMarkdownView;
+		}
+
 		if (this.lastMarkdownView?.file) {
 			return this.lastMarkdownView;
 		}
@@ -417,6 +434,7 @@ export default class VaultPilotPlugin extends Plugin {
 		return new Promise((resolve, reject) => {
 			const child = spawn(commandConfig.command, args, {
 				cwd,
+				env: getChildProcessEnv(),
 				shell: commandConfig.useShell,
 				windowsHide: true,
 			});
@@ -509,7 +527,7 @@ export default class VaultPilotPlugin extends Plugin {
 				}
 				window.clearTimeout(timeout);
 				settled = true;
-				reject(error);
+				reject(formatSpawnError(error, commandConfig.command));
 			});
 
 			child.on('close', (exitCode) => {
@@ -728,37 +746,73 @@ class VaultPilotView extends ItemView {
 		const history = [...this.history];
 		this.addMessage('user', trimmedPrompt);
 		const assistantMessage = this.addStreamingMessage('assistant', 'Copilot is thinking...');
-		let hasStreamedText = false;
+		let streamedResponse = '';
+		let renderTimeoutId: number | null = null;
+		let isRenderingStream = false;
+		let hasPendingRender = false;
+		let isStreamingCancelled = false;
 		this.setBusy(true);
+
+		const renderStreamedMarkdown = async (): Promise<void> => {
+			if (isStreamingCancelled) {
+				return;
+			}
+
+			if (isRenderingStream) {
+				hasPendingRender = true;
+				return;
+			}
+
+			isRenderingStream = true;
+			try {
+				do {
+					hasPendingRender = false;
+					await this.renderMarkdownMessage(assistantMessage, streamedResponse);
+				} while (hasPendingRender && !isStreamingCancelled);
+			} finally {
+				isRenderingStream = false;
+			}
+		};
+
+		const scheduleStreamingRender = (): void => {
+			if (renderTimeoutId !== null) {
+				return;
+			}
+
+			renderTimeoutId = window.setTimeout(() => {
+				renderTimeoutId = null;
+				void renderStreamedMarkdown();
+			}, STREAMING_MARKDOWN_RENDER_DELAY_MS);
+		};
+
+		const handleChunk = (chunk: string): void => {
+			streamedResponse += chunk;
+			scheduleStreamingRender();
+		};
 
 		try {
 			const result = context
-				? await this.plugin.streamPromptWithContext(trimmedPrompt, context, history, (chunk) => {
-					if (!hasStreamedText) {
-						assistantMessage.contentEl.setText('');
-						hasStreamedText = true;
-					}
-					assistantMessage.contentEl.appendText(chunk);
-					this.scrollToBottom();
-				})
-				: await this.plugin.streamPromptFromView(trimmedPrompt, history, (chunk) => {
-					if (!hasStreamedText) {
-						assistantMessage.contentEl.setText('');
-						hasStreamedText = true;
-					}
-					assistantMessage.contentEl.appendText(chunk);
-					this.scrollToBottom();
-				});
+				? await this.plugin.streamPromptWithContext(trimmedPrompt, context, history, handleChunk)
+				: await this.plugin.streamPromptFromView(trimmedPrompt, history, handleChunk);
 			const response = result.response;
-			await this.renderMarkdownMessage(assistantMessage, response);
+			if (renderTimeoutId !== null) {
+				window.clearTimeout(renderTimeoutId);
+				renderTimeoutId = null;
+			}
+			streamedResponse = response;
+			await renderStreamedMarkdown();
 			this.addMetadata(assistantMessage.contentEl, result.metadata);
 			this.history.push({ role: 'assistant', text: response });
 		} catch (error) {
+			isStreamingCancelled = true;
 			const message = error instanceof Error ? error.message : String(error);
 			assistantMessage.containerEl.remove();
 			this.addMessage('error', message);
 			new Notice('VaultPilot failed. See chat for details.');
 		} finally {
+			if (renderTimeoutId !== null) {
+				window.clearTimeout(renderTimeoutId);
+			}
 			this.setBusy(false);
 		}
 	}
@@ -1059,6 +1113,63 @@ function formatMs(ms: number): string {
 		return `${Math.round(ms)} ms`;
 	}
 	return `${(ms / 1000).toFixed(1)} s`;
+}
+
+function getChildProcessEnv(): NodeJS.ProcessEnv {
+	const env = { ...process.env };
+	const pathKey = getPathEnvKey(env);
+	const existingPath = env[pathKey] ?? '';
+	env[pathKey] = mergeSearchPaths(existingPath, getDefaultSearchPaths());
+	return env;
+}
+
+function getPathEnvKey(env: NodeJS.ProcessEnv): string {
+	return Object.keys(env).find((key) => key.toLowerCase() === 'path') ?? 'PATH';
+}
+
+function mergeSearchPaths(existingPath: string, additionalPaths: string[]): string {
+	const paths = [
+		...existingPath.split(delimiter),
+		...additionalPaths,
+	].filter(Boolean);
+
+	return [...new Set(paths)].join(delimiter);
+}
+
+function getDefaultSearchPaths(): string[] {
+	const homePaths = process.env.HOME
+		? [
+			`${process.env.HOME}/.local/bin`,
+			`${process.env.HOME}/bin`,
+		]
+		: [];
+
+	return [
+		'/opt/homebrew/bin',
+		'/usr/local/bin',
+		'/opt/local/bin',
+		'/usr/bin',
+		'/bin',
+		...homePaths,
+	];
+}
+
+function formatSpawnError(error: Error, command: string): Error {
+	const code = (error as NodeJS.ErrnoException).code;
+	if (code !== 'ENOENT') {
+		return error;
+	}
+
+	return new Error([
+		`Unable to find Copilot command "${command}".`,
+		'Install and authenticate the Copilot CLI, or set VaultPilot to Custom command mode with the executable path.',
+		'On macOS, Obsidian may not inherit your terminal PATH; try an absolute path such as /opt/homebrew/bin/copilot or /usr/local/bin/copilot.',
+	].join('\n'));
+}
+
+function getMarkdownViewFromLeaf(leaf: WorkspaceLeaf | null): MarkdownView | null {
+	const view = leaf?.view;
+	return view instanceof MarkdownView ? view : null;
 }
 
 function getWindowsNodePath(): string | null {
