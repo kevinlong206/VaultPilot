@@ -1,5 +1,5 @@
 {
-	"name": "obsidian-copilot-direct",
+	"name": "vaultpilot",
 	"version": "0.1.0",
 	"description": "An Obsidian plugin that talks directly to a local GitHub Copilot CLI.",
 	"main": "main.js",

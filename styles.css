@@ -1,61 +1,99 @@
-.copilot-direct-view {
+.vaultpilot-view {
 	display: flex;
 	flex-direction: column;
-	gap: 0.75rem;
+	gap: 0.85rem;
 	height: 100%;
-	padding: 0.75rem;
+	padding: 1rem;
 	user-select: text;
 	-webkit-user-select: text;
 }
 
-.copilot-direct-toolbar {
+.vaultpilot-toolbar {
 	display: flex;
-	gap: 0.5rem;
 	align-items: center;
+	justify-content: space-between;
+	padding: 0 0.15rem;
 }
 
-.copilot-direct-model-select {
-	max-width: 100%;
+.vaultpilot-title-block {
+	display: flex;
+	flex-direction: column;
+	gap: 0.1rem;
+	letter-spacing: -0.01em;
 }
 
-.copilot-direct-context {
-	background: var(--background-secondary);
-	border: 1px solid var(--background-modifier-border);
-	border-radius: 6px;
+.vaultpilot-title-block strong {
+	font-size: 1.05rem;
+}
+
+.vaultpilot-subtitle {
 	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+}
+
+.vaultpilot-model-select {
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	color: var(--text-normal);
 	font-size: var(--font-ui-small);
-	padding: 0.4rem 0.6rem;
+	max-width: min(15rem, 48vw);
+	padding: 0.25rem 0.65rem;
+}
+
+.vaultpilot-context {
+	background: color-mix(in srgb, var(--interactive-accent) 9%, var(--background-secondary));
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 999px;
+	color: var(--text-normal);
+	font-size: var(--font-ui-small);
+	overflow: hidden;
+	padding: 0.45rem 0.75rem;
+	text-overflow: ellipsis;
 	user-select: text;
 	-webkit-user-select: text;
+	white-space: nowrap;
 }
 
-.copilot-direct-log {
+.vaultpilot-log {
 	display: flex;
 	flex: 1;
 	flex-direction: column;
-	gap: 0.75rem;
+	gap: 0.85rem;
 	min-height: 0;
 	overflow-y: auto;
+	padding: 0.1rem 0.15rem 0.25rem;
 	user-select: text;
 	-webkit-user-select: text;
 }
 
-.copilot-direct-message {
+.vaultpilot-message {
 	border: 1px solid var(--background-modifier-border);
-	border-radius: 8px;
-	padding: 0.75rem;
+	border-radius: 14px;
+	box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+	line-height: 1.5;
+	max-width: 94%;
+	padding: 0.85rem 0.95rem;
 	position: relative;
 	user-select: text;
 	-webkit-user-select: text;
 }
 
-.copilot-direct-message-text {
+.vaultpilot-message-text {
 	white-space: pre-wrap;
 	user-select: text;
 	-webkit-user-select: text;
 }
 
-.copilot-direct-metadata {
+.vaultpilot-message-text > :first-child {
+	margin-top: 0;
+}
+
+.vaultpilot-message-text > :last-child {
+	margin-bottom: 0;
+}
+
+.vaultpilot-metadata {
 	border-top: 1px solid var(--background-modifier-border);
 	color: var(--text-muted);
 	font-size: var(--font-ui-smaller);
@@ -65,27 +103,97 @@
 	-webkit-user-select: text;
 }
 
-.copilot-direct-message-user {
-	background: var(--background-secondary);
+.vaultpilot-message-user {
+	align-self: flex-end;
+	background: color-mix(in srgb, var(--interactive-accent) 14%, var(--background-secondary));
+	border-color: color-mix(in srgb, var(--interactive-accent) 24%, var(--background-modifier-border));
 }
 
-.copilot-direct-message-assistant {
+.vaultpilot-message-assistant {
+	align-self: flex-start;
 	background: var(--background-primary);
 }
 
-.copilot-direct-message-error {
+.vaultpilot-message-error {
+	align-self: flex-start;
+	background: color-mix(in srgb, var(--text-error) 8%, var(--background-primary));
 	border-color: var(--text-error);
 	color: var(--text-error);
 }
 
-.copilot-direct-input {
-	min-height: 6rem;
-	resize: vertical;
+.vaultpilot-input {
+	background: transparent;
+	border: 0;
+	box-shadow: none;
+	font-size: var(--font-ui-medium);
+	line-height: 1.45;
+	min-height: 5rem;
+	outline: none;
+	padding: 0;
+	resize: none;
 	width: 100%;
 }
 
-.copilot-direct-input-row {
+.vaultpilot-input:focus {
+	box-shadow: none;
+}
+
+.vaultpilot-input-row {
+	background: var(--background-primary);
+	border: 1px solid var(--background-modifier-border);
+	border-radius: 16px;
+	box-shadow: 0 8px 24px rgb(0 0 0 / 0.08);
 	display: flex;
 	flex-direction: column;
-	gap: 0.5rem;
+	gap: 0.75rem;
+	padding: 0.85rem;
+}
+
+.vaultpilot-composer-controls {
+	align-items: center;
+	border-top: 1px solid var(--background-modifier-border);
+	display: flex;
+	gap: 0.75rem;
+	justify-content: space-between;
+	padding-top: 0.75rem;
+}
+
+.vaultpilot-model-control {
+	align-items: center;
+	display: flex;
+	gap: 0.4rem;
+	min-width: 0;
+}
+
+.vaultpilot-control-label {
+	color: var(--text-muted);
+	font-size: var(--font-ui-smaller);
+	text-transform: uppercase;
+	letter-spacing: 0.04em;
+}
+
+.vaultpilot-send-button {
+	border-radius: 999px;
+	font-weight: 600;
+	min-width: 5.25rem;
+	padding-inline: 1rem;
+}
+
+@media (max-width: 420px) {
+	.vaultpilot-composer-controls {
+		align-items: stretch;
+		flex-direction: column;
+	}
+
+	.vaultpilot-model-control {
+		justify-content: space-between;
+	}
+
+	.vaultpilot-model-select {
+		max-width: 100%;
+	}
+
+	.vaultpilot-send-button {
+		width: 100%;
+	}
 }

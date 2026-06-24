@@ -16,10 +16,10 @@ import {
 import { spawn } from 'node:child_process';
 import { existsSync } from 'node:fs';
 
-const VIEW_TYPE_COPILOT_DIRECT = 'copilot-direct-chat';
+const VIEW_TYPE_VAULTPILOT = 'vaultpilot-chat';
 const BASE_COPILOT_ARGS = ['-p', '{prompt}', '--allow-all', '--no-color', '--output-format', 'json'];
 
-interface CopilotDirectSettings {
+interface VaultPilotSettings {
 	commandMode: 'auto' | 'custom';
 	command: string;
 	args: string;
@@ -51,7 +51,7 @@ const COPILOT_MODELS = [
 	'gemini-3.5-flash',
 ] as const;
 
-const DEFAULT_SETTINGS: CopilotDirectSettings = {
+const DEFAULT_SETTINGS: VaultPilotSettings = {
 	commandMode: 'auto',
 	command: 'copilot',
 	args: BASE_COPILOT_ARGS.join('\n'),
@@ -110,8 +110,8 @@ interface CopilotPromptResult {
 	metadata: CopilotRunMetadata;
 }
 
-export default class CopilotDirectPlugin extends Plugin {
-	settings!: CopilotDirectSettings;
+export default class VaultPilotPlugin extends Plugin {
+	settings!: VaultPilotSettings;
 	private lastMarkdownView: MarkdownView | null = null;
 
 	async onload(): Promise<void> {
@@ -126,16 +126,16 @@ export default class CopilotDirectPlugin extends Plugin {
 		}));
 
 		this.registerView(
-			VIEW_TYPE_COPILOT_DIRECT,
-			(leaf) => new CopilotDirectView(leaf, this),
+			VIEW_TYPE_VAULTPILOT,
+			(leaf) => new VaultPilotView(leaf, this),
 		);
 
-		this.addRibbonIcon('bot', 'Open Copilot Direct', () => {
+		this.addRibbonIcon('bot', 'Open VaultPilot', () => {
 			void this.activateView();
 		});
 
 		this.addCommand({
-			id: 'open-copilot-direct-chat',
+			id: 'open-vaultpilot-chat',
 			name: 'Open Copilot chat',
 			callback: () => {
 				void this.activateView();
@@ -172,24 +172,24 @@ export default class CopilotDirectPlugin extends Plugin {
 			},
 		});
 
-		this.addSettingTab(new CopilotDirectSettingTab(this.app, this));
+		this.addSettingTab(new VaultPilotSettingTab(this.app, this));
 	}
 
 	onunload(): void {
-		this.app.workspace.detachLeavesOfType(VIEW_TYPE_COPILOT_DIRECT);
+		this.app.workspace.detachLeavesOfType(VIEW_TYPE_VAULTPILOT);
 	}
 
 	async activateView(): Promise<void> {
-		const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_COPILOT_DIRECT);
+		const leaves = this.app.workspace.getLeavesOfType(VIEW_TYPE_VAULTPILOT);
 		let leaf: WorkspaceLeaf | undefined = leaves[0];
 
 		if (!leaf) {
 			leaf = this.app.workspace.getRightLeaf(false) ?? undefined;
 			if (!leaf) {
-				new Notice('Unable to open Copilot Direct view.');
+				new Notice('Unable to open VaultPilot view.');
 				return;
 			}
-			await leaf.setViewState({ type: VIEW_TYPE_COPILOT_DIRECT, active: true });
+			await leaf.setViewState({ type: VIEW_TYPE_VAULTPILOT, active: true });
 		}
 
 		this.app.workspace.revealLeaf(leaf);
@@ -199,7 +199,7 @@ export default class CopilotDirectPlugin extends Plugin {
 		this.settings = Object.assign(
 			{},
 			DEFAULT_SETTINGS,
-			(await this.loadData()) as Partial<CopilotDirectSettings> | null,
+			(await this.loadData()) as Partial<VaultPilotSettings> | null,
 		);
 	}
 
@@ -267,7 +267,7 @@ export default class CopilotDirectPlugin extends Plugin {
 			this.captureMarkdownView(ctx);
 		}
 		const context = await this.getEditorContext(editor, ctx);
-		new Notice('Copilot Direct is thinking...');
+		new Notice('VaultPilot is thinking...');
 		return this.promptWithContext(prompt, context);
 	}
 
@@ -294,16 +294,16 @@ export default class CopilotDirectPlugin extends Plugin {
 		return this.getCurrentMarkdownView()?.file?.path ?? '';
 	}
 
-	private async getOrCreateView(): Promise<CopilotDirectView> {
+	private async getOrCreateView(): Promise<VaultPilotView> {
 		await this.activateView();
-		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_COPILOT_DIRECT)[0];
+		const leaf = this.app.workspace.getLeavesOfType(VIEW_TYPE_VAULTPILOT)[0];
 		const view = leaf?.view;
 
-		if (view instanceof CopilotDirectView) {
+		if (view instanceof VaultPilotView) {
 			return view;
 		}
 
-		throw new Error('Unable to create Copilot Direct view.');
+		throw new Error('Unable to create VaultPilot view.');
 	}
 
 	private async getActiveContext(): Promise<CopilotContext> {
@@ -620,8 +620,8 @@ interface CopilotJsonEvent {
 	};
 }
 
-class CopilotDirectView extends ItemView {
-	private readonly plugin: CopilotDirectPlugin;
+class VaultPilotView extends ItemView {
+	private readonly plugin: VaultPilotPlugin;
 	private readonly history: CopilotChatMessage[] = [];
 	private logEl!: HTMLDivElement;
 	private contextEl!: HTMLDivElement;
@@ -630,17 +630,17 @@ class CopilotDirectView extends ItemView {
 	private modelSelectEl!: HTMLSelectElement;
 	private contextIntervalId: number | null = null;
 
-	constructor(leaf: WorkspaceLeaf, plugin: CopilotDirectPlugin) {
+	constructor(leaf: WorkspaceLeaf, plugin: VaultPilotPlugin) {
 		super(leaf);
 		this.plugin = plugin;
 	}
 
 	getViewType(): string {
-		return VIEW_TYPE_COPILOT_DIRECT;
+		return VIEW_TYPE_VAULTPILOT;
 	}
 
 	getDisplayText(): string {
-		return 'Copilot Direct';
+		return 'VaultPilot';
 	}
 
 	getIcon(): string {
@@ -650,19 +650,42 @@ class CopilotDirectView extends ItemView {
 	async onOpen(): Promise<void> {
 		const { contentEl } = this;
 		contentEl.empty();
-		contentEl.addClass('copilot-direct-view');
+		contentEl.addClass('vaultpilot-view');
 
-		const toolbarEl = contentEl.createDiv({ cls: 'copilot-direct-toolbar' });
-		toolbarEl.createEl('strong', { text: 'Copilot Direct' });
-		this.modelSelectEl = toolbarEl.createEl('select', {
-			cls: 'copilot-direct-model-select',
+		const toolbarEl = contentEl.createDiv({ cls: 'vaultpilot-toolbar' });
+		const titleEl = toolbarEl.createDiv({ cls: 'vaultpilot-title-block' });
+		titleEl.createEl('strong', { text: 'VaultPilot' });
+		titleEl.createDiv({ cls: 'vaultpilot-subtitle', text: 'GitHub Copilot in your vault' });
+
+		this.contextEl = contentEl.createDiv({ cls: 'vaultpilot-context' });
+		this.updateContextIndicator();
+		this.contextIntervalId = window.setInterval(() => {
+			this.updateContextIndicator();
+		}, 1000);
+
+		this.logEl = contentEl.createDiv({ cls: 'vaultpilot-log' });
+		this.addMessage('assistant', 'Ask Copilot about your active note, selected text, or anything in your vault.', false);
+
+		const inputRowEl = contentEl.createDiv({ cls: 'vaultpilot-input-row' });
+		this.inputEl = inputRowEl.createEl('textarea', {
+			cls: 'vaultpilot-input',
+			attr: {
+				placeholder: 'Ask Copilot...',
+			},
+		});
+
+		const composerControlsEl = inputRowEl.createDiv({ cls: 'vaultpilot-composer-controls' });
+		const modelControlEl = composerControlsEl.createDiv({ cls: 'vaultpilot-model-control' });
+		modelControlEl.createSpan({ cls: 'vaultpilot-control-label', text: 'Model' });
+		this.modelSelectEl = modelControlEl.createEl('select', {
+			cls: 'vaultpilot-model-select',
 			attr: {
 				'aria-label': 'Copilot model',
 			},
 		});
 		for (const model of COPILOT_MODELS) {
 			this.modelSelectEl.createEl('option', {
-				text: model === 'auto' ? 'Auto model' : model,
+				text: model === 'auto' ? 'Auto' : model,
 				value: model,
 			});
 		}
@@ -672,24 +695,10 @@ class CopilotDirectView extends ItemView {
 			void this.plugin.saveSettings();
 		});
 
-		this.contextEl = contentEl.createDiv({ cls: 'copilot-direct-context' });
-		this.updateContextIndicator();
-		this.contextIntervalId = window.setInterval(() => {
-			this.updateContextIndicator();
-		}, 1000);
-
-		this.logEl = contentEl.createDiv({ cls: 'copilot-direct-log' });
-		this.addMessage('assistant', 'Ask Copilot about your active note, selected text, or anything in your vault.', false);
-
-		const inputRowEl = contentEl.createDiv({ cls: 'copilot-direct-input-row' });
-		this.inputEl = inputRowEl.createEl('textarea', {
-			cls: 'copilot-direct-input',
-			attr: {
-				placeholder: 'Ask Copilot...',
-			},
+		this.sendButtonEl = composerControlsEl.createEl('button', {
+			cls: 'vaultpilot-send-button',
+			text: 'Send',
 		});
-
-		this.sendButtonEl = inputRowEl.createEl('button', { text: 'Send to Copilot' });
 		this.sendButtonEl.addEventListener('click', () => {
 			void this.submitCurrentInput();
 		});
@@ -712,7 +721,7 @@ class CopilotDirectView extends ItemView {
 	async submitPrompt(prompt: string, context?: CopilotContext): Promise<void> {
 		const trimmedPrompt = prompt.trim();
 		if (!trimmedPrompt) {
-			new Notice('Enter a prompt for Copilot Direct.');
+			new Notice('Enter a prompt for VaultPilot.');
 			return;
 		}
 
@@ -748,7 +757,7 @@ class CopilotDirectView extends ItemView {
 			const message = error instanceof Error ? error.message : String(error);
 			assistantMessage.containerEl.remove();
 			this.addMessage('error', message);
-			new Notice('Copilot Direct failed. See chat for details.');
+			new Notice('VaultPilot failed. See chat for details.');
 		} finally {
 			this.setBusy(false);
 		}
@@ -766,11 +775,11 @@ class CopilotDirectView extends ItemView {
 
 	private addMessage(role: 'user' | 'assistant' | 'error', text: string, record = true): void {
 		const cls = role === 'error'
-			? 'copilot-direct-message-error'
-			: `copilot-direct-message-${role}`;
+			? 'vaultpilot-message-error'
+			: `vaultpilot-message-${role}`;
 
-		const messageEl = this.logEl.createDiv({ cls: `copilot-direct-message ${cls}` });
-		const messageTextEl = messageEl.createDiv({ cls: 'copilot-direct-message-text' });
+		const messageEl = this.logEl.createDiv({ cls: `vaultpilot-message ${cls}` });
+		const messageTextEl = messageEl.createDiv({ cls: 'vaultpilot-message-text' });
 		if (role === 'assistant') {
 			void this.renderMarkdownMessage({ containerEl: messageEl, contentEl: messageTextEl }, text);
 		} else {
@@ -785,9 +794,9 @@ class CopilotDirectView extends ItemView {
 
 	private addStreamingMessage(role: 'assistant', text: string): ChatMessageElements {
 		const messageEl = this.logEl.createDiv({
-			cls: `copilot-direct-message copilot-direct-message-${role}`,
+			cls: `vaultpilot-message vaultpilot-message-${role}`,
 		});
-		const messageTextEl = messageEl.createDiv({ cls: 'copilot-direct-message-text' });
+		const messageTextEl = messageEl.createDiv({ cls: 'vaultpilot-message-text' });
 		messageTextEl.setText(text);
 		this.scrollToBottom();
 		return { containerEl: messageEl, contentEl: messageTextEl };
@@ -815,7 +824,7 @@ class CopilotDirectView extends ItemView {
 		}
 
 		messageTextEl.parentElement?.createDiv({
-			cls: 'copilot-direct-metadata',
+			cls: 'vaultpilot-metadata',
 			text: items.join(' • '),
 		});
 	}
@@ -827,7 +836,8 @@ class CopilotDirectView extends ItemView {
 	private setBusy(isBusy: boolean): void {
 		this.inputEl.disabled = isBusy;
 		this.sendButtonEl.disabled = isBusy;
-		this.sendButtonEl.setText(isBusy ? 'Waiting for Copilot...' : 'Send to Copilot');
+		this.modelSelectEl.disabled = isBusy;
+		this.sendButtonEl.setText(isBusy ? 'Thinking...' : 'Send');
 	}
 }
 
@@ -847,7 +857,7 @@ class PromptModal extends Modal {
 		this.titleEl.setText(this.title);
 
 		this.inputEl = this.contentEl.createEl('textarea', {
-			cls: 'copilot-direct-input',
+			cls: 'vaultpilot-input',
 			attr: {
 				placeholder: 'What should Copilot do?',
 			},
@@ -873,7 +883,7 @@ class PromptModal extends Modal {
 	private async submit(): Promise<void> {
 		const prompt = this.inputEl.value.trim();
 		if (!prompt) {
-			new Notice('Enter a prompt for Copilot Direct.');
+			new Notice('Enter a prompt for VaultPilot.');
 			return;
 		}
 
@@ -887,10 +897,10 @@ class PromptModal extends Modal {
 	}
 }
 
-class CopilotDirectSettingTab extends PluginSettingTab {
-	private readonly plugin: CopilotDirectPlugin;
+class VaultPilotSettingTab extends PluginSettingTab {
+	private readonly plugin: VaultPilotPlugin;
 
-	constructor(app: App, plugin: CopilotDirectPlugin) {
+	constructor(app: App, plugin: VaultPilotPlugin) {
 		super(app, plugin);
 		this.plugin = plugin;
 	}
@@ -899,7 +909,7 @@ class CopilotDirectSettingTab extends PluginSettingTab {
 		const { containerEl } = this;
 		containerEl.empty();
 
-		containerEl.createEl('h2', { text: 'Copilot Direct settings' });
+		containerEl.createEl('h2', { text: 'VaultPilot settings' });
 
 		new Setting(containerEl)
 			.setName('Command mode')
@@ -1062,7 +1072,7 @@ function getWindowsNodePath(): string | null {
 
 function getWindowsCopilotLoaderPath(): string | null {
 	const candidates = [
-		process.env.COPILOT_DIRECT_LOADER,
+		process.env.VAULTPILOT_LOADER,
 		process.env.APPDATA ? `${process.env.APPDATA}\\npm\\node_modules\\@github\\copilot\\npm-loader.js` : undefined,
 		'C:\\ProgramData\\global-npm\\node_modules\\@github\\copilot\\npm-loader.js',
 	];

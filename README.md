@@ -1,6 +1,6 @@
-# Copilot Direct for Obsidian
+# VaultPilot for Obsidian
 
-Copilot Direct is a desktop-only Obsidian plugin that sends prompts from your vault directly to a local GitHub Copilot-compatible CLI command. It is intended to provide a Claudian-like in-vault chat and note-assistance workflow without routing requests through Agent Maestro.
+VaultPilot is a desktop-only Obsidian plugin that sends prompts from your vault directly to a local GitHub Copilot-compatible CLI command. It is intended to provide a Claudian-like in-vault chat and note-assistance workflow without routing requests through Agent Maestro.
 
 ## Features
 
@@ -14,8 +14,8 @@ Copilot Direct is a desktop-only Obsidian plugin that sends prompts from your va
 
 1. Install and authenticate the GitHub Copilot CLI you want to use from your terminal.
 2. Build this plugin with `npm install` and `npm run build`.
-3. Copy `manifest.json`, `main.js`, and `styles.css` into `<vault>/.obsidian/plugins/copilot-direct/`.
-4. Enable **Copilot Direct** in Obsidian community plugins.
+3. Copy `manifest.json`, `main.js`, and `styles.css` into `<vault>/.obsidian/plugins/vaultpilot/`.
+4. Enable **VaultPilot** in Obsidian community plugins.
 5. Open the plugin settings if you want to select a model or override the Copilot command.
 
 By default, **Command mode** is set to **Auto platform default**:
@@ -62,3 +62,14 @@ shell
 ```
 
 `gh copilot suggest` is command-oriented rather than general chat-oriented, so a dedicated Copilot chat CLI will provide a better Claudian-like experience.
+
+## Try from GitHub on another machine
+
+```sh
+git clone https://github.com/kevinlong206/VaultPilot.git
+cd VaultPilot
+npm install
+npm run build
+mkdir -p "<vault>/.obsidian/plugins/vaultpilot"
+cp manifest.json main.js styles.css "<vault>/.obsidian/plugins/vaultpilot/"
+```
