@@ -5,6 +5,7 @@ import {
 	MarkdownFileInfo,
 	MarkdownView,
 	Modal,
+	MarkdownRenderer,
 	Notice,
 	Plugin,
 	PluginSettingTab,
@@ -77,6 +78,11 @@ interface CopilotRunResult {
 interface CopilotChatMessage {
 	role: 'user' | 'assistant';
 	text: string;
+}
+
+interface ChatMessageElements {
+	containerEl: HTMLDivElement;
+	contentEl: HTMLDivElement;
 }
 
 interface CopilotRunMetadata {
@@ -271,6 +277,10 @@ export default class CopilotDirectPlugin extends Plugin {
 		}
 
 		return `Context: ${markdownView.file.path} • file path only`;
+	}
+
+	getContextSourcePath(): string {
+		return this.getCurrentMarkdownView()?.file?.path ?? '';
 	}
 
 	private async getOrCreateView(): Promise<CopilotDirectView> {
@@ -662,27 +672,27 @@ class CopilotDirectView extends ItemView {
 			const result = context
 				? await this.plugin.streamPromptWithContext(trimmedPrompt, context, history, (chunk) => {
 					if (!hasStreamedText) {
-						assistantMessage.setText('');
+						assistantMessage.contentEl.setText('');
 						hasStreamedText = true;
 					}
-					assistantMessage.appendText(chunk);
+					assistantMessage.contentEl.appendText(chunk);
 					this.scrollToBottom();
 				})
 				: await this.plugin.streamPromptFromView(trimmedPrompt, history, (chunk) => {
 					if (!hasStreamedText) {
-						assistantMessage.setText('');
+						assistantMessage.contentEl.setText('');
 						hasStreamedText = true;
 					}
-					assistantMessage.appendText(chunk);
+					assistantMessage.contentEl.appendText(chunk);
 					this.scrollToBottom();
 				});
 			const response = result.response;
-			assistantMessage.setText(response);
-			this.addMetadata(assistantMessage, result.metadata);
+			await this.renderMarkdownMessage(assistantMessage, response);
+			this.addMetadata(assistantMessage.contentEl, result.metadata);
 			this.history.push({ role: 'assistant', text: response });
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			assistantMessage.parentElement?.remove();
+			assistantMessage.containerEl.remove();
 			this.addMessage('error', message);
 			new Notice('Copilot Direct failed. See chat for details.');
 		} finally {
@@ -707,7 +717,11 @@ class CopilotDirectView extends ItemView {
 
 		const messageEl = this.logEl.createDiv({ cls: `copilot-direct-message ${cls}` });
 		const messageTextEl = messageEl.createDiv({ cls: 'copilot-direct-message-text' });
-		messageTextEl.setText(text);
+		if (role === 'assistant') {
+			void this.renderMarkdownMessage({ containerEl: messageEl, contentEl: messageTextEl }, text);
+		} else {
+			messageTextEl.setText(text);
+		}
 
 		if (record && role !== 'error') {
 			this.history.push({ role, text });
@@ -715,14 +729,21 @@ class CopilotDirectView extends ItemView {
 		this.scrollToBottom();
 	}
 
-	private addStreamingMessage(role: 'assistant', text: string): HTMLDivElement {
+	private addStreamingMessage(role: 'assistant', text: string): ChatMessageElements {
 		const messageEl = this.logEl.createDiv({
 			cls: `copilot-direct-message copilot-direct-message-${role}`,
 		});
 		const messageTextEl = messageEl.createDiv({ cls: 'copilot-direct-message-text' });
 		messageTextEl.setText(text);
 		this.scrollToBottom();
-		return messageTextEl;
+		return { containerEl: messageEl, contentEl: messageTextEl };
+	}
+
+	private async renderMarkdownMessage(message: ChatMessageElements, markdown: string): Promise<void> {
+		message.contentEl.empty();
+		const sourcePath = this.plugin.getContextSourcePath();
+		await MarkdownRenderer.render(this.app, markdown, message.contentEl, sourcePath, this);
+		this.scrollToBottom();
 	}
 
 	private addMetadata(messageTextEl: HTMLDivElement, metadata: CopilotRunMetadata): void {
