@@ -14,10 +14,13 @@ import {
 	WorkspaceLeaf,
 } from 'obsidian';
 import { spawn } from 'node:child_process';
+import { existsSync } from 'node:fs';
 
 const VIEW_TYPE_COPILOT_DIRECT = 'copilot-direct-chat';
+const BASE_COPILOT_ARGS = ['-p', '{prompt}', '--allow-all', '--no-color', '--output-format', 'json'];
 
 interface CopilotDirectSettings {
+	commandMode: 'auto' | 'custom';
 	command: string;
 	args: string;
 	model: string;
@@ -49,15 +52,23 @@ const COPILOT_MODELS = [
 ] as const;
 
 const DEFAULT_SETTINGS: CopilotDirectSettings = {
-	command: 'copilot.cmd',
-	args: '-p\n{prompt}\n--allow-all\n--no-color\n--output-format\njson',
+	commandMode: 'auto',
+	command: 'copilot',
+	args: BASE_COPILOT_ARGS.join('\n'),
 	model: 'auto',
 	passPromptViaStdin: false,
-	useShell: process.platform === 'win32',
+	useShell: false,
 	useVaultAsCwd: true,
 	includeActiveNoteByDefault: true,
 	timeoutSeconds: 120,
 };
+
+interface CopilotCommandConfig {
+	command: string;
+	args: string[];
+	passPromptViaStdin: boolean;
+	useShell: boolean;
+}
 
 interface CopilotContext {
 	activeFile: TFile | null;
@@ -389,13 +400,12 @@ export default class CopilotDirectPlugin extends Plugin {
 		activeFile: TFile | null,
 		onStdout?: (chunk: string) => void,
 	): Promise<CopilotRunResult> {
-		if (!this.settings.command.trim()) {
+		const commandConfig = this.resolveCommandConfig(prompt, activeFile);
+		if (!commandConfig.command.trim()) {
 			throw new Error('Copilot command is not configured.');
 		}
 
-		const args = parseArgs(this.settings.args).map((arg) => (
-			applyTemplate(arg, prompt, this.getVaultPath(), activeFile)
-		));
+		const args = [...commandConfig.args];
 		if (this.settings.model && this.settings.model !== 'auto') {
 			args.push('--model', this.settings.model);
 		}
@@ -405,9 +415,9 @@ export default class CopilotDirectPlugin extends Plugin {
 		const parseJsonOutput = hasJsonOutputArg(args);
 
 		return new Promise((resolve, reject) => {
-			const child = spawn(this.settings.command, args, {
+			const child = spawn(commandConfig.command, args, {
 				cwd,
-				shell: this.settings.useShell,
+				shell: commandConfig.useShell,
 				windowsHide: true,
 			});
 
@@ -514,11 +524,55 @@ export default class CopilotDirectPlugin extends Plugin {
 				resolve({ stdout, stderr, exitCode, content, metadata });
 			});
 
-			if (this.settings.passPromptViaStdin) {
+			if (commandConfig.passPromptViaStdin) {
 				child.stdin?.write(prompt);
 				child.stdin?.end();
 			}
 		});
+	}
+
+	private resolveCommandConfig(prompt: string, activeFile: TFile | null): CopilotCommandConfig {
+		if (this.settings.commandMode === 'custom') {
+			return {
+				command: this.settings.command,
+				args: parseArgs(this.settings.args).map((arg) => (
+					applyTemplate(arg, prompt, this.getVaultPath(), activeFile)
+				)),
+				passPromptViaStdin: this.settings.passPromptViaStdin,
+				useShell: this.settings.useShell,
+			};
+		}
+
+		const args = BASE_COPILOT_ARGS.map((arg) => (
+			applyTemplate(arg, prompt, this.getVaultPath(), activeFile)
+		));
+
+		if (process.platform === 'win32') {
+			const nodePath = getWindowsNodePath();
+			const loaderPath = getWindowsCopilotLoaderPath();
+			if (nodePath && loaderPath) {
+				return {
+					command: nodePath,
+					args: [loaderPath, ...args],
+					passPromptViaStdin: false,
+					useShell: false,
+				};
+			}
+
+			return {
+				command: 'copilot.cmd',
+				args,
+				passPromptViaStdin: false,
+				useShell: true,
+			};
+		}
+
+		return {
+			command: 'copilot',
+			args,
+			passPromptViaStdin: false,
+			useShell: false,
+		};
 	}
 
 	private formatResult(result: CopilotRunResult): string {
@@ -848,8 +902,22 @@ class CopilotDirectSettingTab extends PluginSettingTab {
 		containerEl.createEl('h2', { text: 'Copilot Direct settings' });
 
 		new Setting(containerEl)
+			.setName('Command mode')
+			.setDesc('Auto uses platform defaults: direct Copilot on macOS/Linux, and a Node loader on Windows when available. Custom uses the command fields below.')
+			.addDropdown((dropdown) => {
+				dropdown
+					.addOption('auto', 'Auto platform default')
+					.addOption('custom', 'Custom command')
+					.setValue(this.plugin.settings.commandMode)
+					.onChange(async (value) => {
+						this.plugin.settings.commandMode = value === 'custom' ? 'custom' : 'auto';
+						await this.plugin.saveSettings();
+					});
+			});
+
+		new Setting(containerEl)
 			.setName('Copilot command')
-			.setDesc('Executable to run. Use an absolute path if Obsidian cannot find it on PATH.')
+			.setDesc('Custom mode only. Executable to run. Use an absolute path if Obsidian cannot find it on PATH.')
 			.addText((text) => {
 				text
 					.setPlaceholder('copilot')
@@ -862,7 +930,7 @@ class CopilotDirectSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Arguments')
-			.setDesc('One argument per line. Supports {prompt}, {vault}, and {file}. Use --output-format json to show model and usage metadata.')
+			.setDesc('Custom mode only. One argument per line. Supports {prompt}, {vault}, and {file}. Use --output-format json to show model and usage metadata.')
 			.addTextArea((text) => {
 				text
 					.setPlaceholder('ask\n{prompt}')
@@ -891,7 +959,7 @@ class CopilotDirectSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Pass prompt through stdin')
-			.setDesc('Recommended when your Copilot CLI accepts stdin. Disable this if your CLI needs {prompt} in the arguments.')
+			.setDesc('Custom mode only. Recommended when your Copilot CLI accepts stdin. Disable this if your CLI needs {prompt} in the arguments.')
 			.addToggle((toggle) => {
 				toggle
 					.setValue(this.plugin.settings.passPromptViaStdin)
@@ -903,7 +971,7 @@ class CopilotDirectSettingTab extends PluginSettingTab {
 
 		new Setting(containerEl)
 			.setName('Use shell')
-			.setDesc('Useful on Windows for .cmd shims and PATH resolution. Disable for stricter executable launching.')
+			.setDesc('Custom mode only. Useful for shell aliases and shims. Disable for stricter executable launching.')
 			.addToggle((toggle) => {
 				toggle
 					.setValue(this.plugin.settings.useShell)
@@ -981,6 +1049,25 @@ function formatMs(ms: number): string {
 		return `${Math.round(ms)} ms`;
 	}
 	return `${(ms / 1000).toFixed(1)} s`;
+}
+
+function getWindowsNodePath(): string | null {
+	const candidates = [
+		`${process.env.ProgramFiles ?? 'C:\\Program Files'}\\nodejs\\node.exe`,
+		'node.exe',
+	];
+
+	return candidates.find((candidate) => candidate === 'node.exe' || existsSync(candidate)) ?? null;
+}
+
+function getWindowsCopilotLoaderPath(): string | null {
+	const candidates = [
+		process.env.COPILOT_DIRECT_LOADER,
+		process.env.APPDATA ? `${process.env.APPDATA}\\npm\\node_modules\\@github\\copilot\\npm-loader.js` : undefined,
+		'C:\\ProgramData\\global-npm\\node_modules\\@github\\copilot\\npm-loader.js',
+	];
+
+	return candidates.find((candidate) => candidate !== undefined && existsSync(candidate)) ?? null;
 }
 
 function countLines(text: string): number {

@@ -7,7 +7,8 @@ Copilot Direct is a desktop-only Obsidian plugin that sends prompts from your va
 - Sidebar chat view for Copilot conversations.
 - Commands to ask Copilot about the selected text or active note.
 - Commands to insert a response below the selection or replace the selection with a Copilot response.
-- Configurable executable, arguments, stdin mode, working directory, timeout, and note-context behavior.
+- Cross-platform auto command mode for Windows, macOS, and Linux.
+- Configurable model, executable, arguments, stdin mode, working directory, timeout, and note-context behavior.
 
 ## Setup
 
@@ -15,13 +16,29 @@ Copilot Direct is a desktop-only Obsidian plugin that sends prompts from your va
 2. Build this plugin with `npm install` and `npm run build`.
 3. Copy `manifest.json`, `main.js`, and `styles.css` into `<vault>/.obsidian/plugins/copilot-direct/`.
 4. Enable **Copilot Direct** in Obsidian community plugins.
-5. Open the plugin settings and set the command/arguments that match your Copilot CLI.
+5. Open the plugin settings if you want to select a model or override the Copilot command.
 
-By default, the plugin runs `copilot` and sends the composed prompt through stdin. If your CLI expects the prompt as an argument instead, disable stdin mode and put `{prompt}` in the argument list.
+By default, **Command mode** is set to **Auto platform default**:
+
+- Windows: uses the Copilot npm loader directly through Node when it can find it, avoiding `cmd.exe` prompt quoting issues.
+- macOS/Linux: runs `copilot` directly from `PATH`.
+
+Auto mode runs Copilot as:
+
+```text
+-p
+{prompt}
+--allow-all
+--no-color
+--output-format
+json
+```
+
+Switch to **Custom command** only when your Copilot installation needs a different executable or wrapper.
 
 ## Argument templates
 
-Arguments are configured one per line. These tokens are replaced before execution:
+In custom command mode, arguments are configured one per line. These tokens are replaced before execution:
 
 - `{prompt}`: the full composed prompt
 - `{vault}`: the vault path
