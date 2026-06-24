@@ -1,0 +1,24 @@
+{
+	"name": "obsidian-copilot-direct",
+	"version": "0.1.0",
+	"description": "An Obsidian plugin that talks directly to a local GitHub Copilot CLI.",
+	"main": "main.js",
+	"type": "module",
+	"scripts": {
+		"dev": "node esbuild.config.mjs",
+		"build": "tsc -noEmit -skipLibCheck && node esbuild.config.mjs production"
+	},
+	"keywords": [
+		"obsidian",
+		"plugin",
+		"github-copilot"
+	],
+	"author": "kevinlong206",
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^22.15.17",
+		"esbuild": "0.25.5",
+		"obsidian": "latest",
+		"typescript": "^5.8.3"
+	}
+}
